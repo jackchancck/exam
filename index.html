@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三年級數學線上小測驗</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f0f4f8;
+        }
+
+        /* 答題介面 - 藍色系 */
+        .quiz-theme { background: #3b82f6; }
+        .option-btn:hover { background-color: #ebf5ff; }
+        .option-selected { background-color: #3b82f6 !important; color: white !important; }
+
+        /* 成績介面 - 綠色系 */
+        .result-theme { background: #10b981; }
+
+        /* 管理介面 - 深藍色系 */
+        .admin-theme { background: #1e293b; }
+
+        .hidden-view { display: none; }
+        
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <!-- 準備中畫面 -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p id="loading-text" class="mt-4 text-gray-600 font-medium">系統準備中...</p>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="min-h-screen flex flex-col">
+        
+        <!-- Header -->
+        <header id="app-header" class="quiz-theme text-white py-4 px-6 shadow-md transition-colors duration-300">
+            <div class="max-w-4xl mx-auto flex justify-between items-center">
+                <h1 id="header-title" class="text-xl font-bold">三年級數學小測驗</h1>
+                <span id="user-display" class="text-sm opacity-80">訪客模式</span>
+            </div>
+        </header>
+
+        <main class="flex-grow container mx-auto px-4 py-8 max-w-4xl">
+            
+            <!-- 畫面一：學生姓名輸入 -->
+            <section id="view-login" class="bg-white rounded-xl shadow-lg p-8 text-center">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">歡迎參加測驗</h2>
+                <div class="max-w-sm mx-auto">
+                    <label class="block text-left text-gray-600 mb-2">請輸入您的姓名：</label>
+                    <input type="text" id="student-name" class="w-full border-2 border-gray-200 rounded-lg px-4 py-2 mb-4 focus:border-blue-500 outline-none" placeholder="例如：王小明">
+                    <button onclick="startQuiz()" class="w-full quiz-theme text-white py-3 rounded-lg font-bold hover:opacity-90 transition shadow-lg">
+                        開始測驗
+                    </button>
+                </div>
+            </section>
+
+            <!-- 畫面一：學生答題介面 -->
+            <section id="view-quiz" class="hidden-view">
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="bg-gray-100 px-6 py-3 flex justify-between items-center border-b">
+                        <span class="text-blue-600 font-bold" id="progress-text">進度：1 / 10</span>
+                        <div class="w-1/2 bg-gray-200 rounded-full h-2">
+                            <div id="progress-bar" class="quiz-theme h-2 rounded-full" style="width: 10%"></div>
+                        </div>
+                    </div>
+                    <div class="p-8">
+                        <div id="question-container">
+                            <h2 id="q-text" class="text-xl font-bold text-gray-800 mb-6 leading-relaxed">題目讀取中...</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="options-grid">
+                                <!-- 選項會動態產生 -->
+                            </div>
+                        </div>
+                        <div class="flex justify-between mt-10">
+                            <button onclick="prevQuestion()" id="btn-prev" class="px-6 py-2 border-2 border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-30">
+                                上一題
+                            </button>
+                            <button onclick="nextQuestion()" id="btn-next" class="px-6 py-2 quiz-theme text-white rounded-lg hover:opacity-90 shadow">
+                                下一題
+                            </button>
+                            <button onclick="submitQuiz()" id="btn-submit" class="hidden-view px-8 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-lg font-bold">
+                                提交測驗
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 畫面二：成績結果 -->
+            <section id="view-result" class="hidden-view text-center">
+                <div class="bg-white rounded-xl shadow-2xl p-10">
+                    <div id="result-icon" class="text-6xl mb-4">🏆</div>
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2" id="result-score">0 分</h2>
+                    <p class="text-xl text-gray-600 mb-6" id="result-grade">評級：良好</p>
+                    <div class="bg-gray-50 rounded-lg p-4 mb-8 text-left inline-block w-full max-w-sm">
+                        <p class="text-gray-700">姓名：<span id="res-name" class="font-bold"></span></p>
+                        <p class="text-gray-700">答對題數：<span id="res-count" class="font-bold"></span> / 10</p>
+                    </div>
+                    <div>
+                        <button onclick="restartQuiz()" class="result-theme text-white px-8 py-3 rounded-lg font-bold shadow hover:opacity-90 transition">
+                            重新測驗
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 畫面三：教師管理介面 -->
+            <section id="view-admin" class="hidden-view">
+                <div class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-6 rounded-xl shadow border-l-4 border-blue-500">
+                        <p class="text-gray-500 text-sm">總測驗人數</p>
+                        <h3 class="text-3xl font-bold" id="stat-total">0</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow border-l-4 border-green-500">
+                        <p class="text-gray-500 text-sm">平均分數</p>
+                        <h3 class="text-3xl font-bold" id="stat-avg">0</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow border-l-4 border-yellow-500">
+                        <p class="text-gray-500 text-sm">及格率 (60+)</p>
+                        <h3 class="text-3xl font-bold" id="stat-pass">0%</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+                        <h2 class="text-lg font-bold text-gray-800">測驗成績表</h2>
+                        <button onclick="exportToCSV()" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition">
+                            匯出 CSV
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-100 text-gray-600 text-sm uppercase">
+                                <tr>
+                                    <th class="px-6 py-4">時間</th>
+                                    <th class="px-6 py-4">學生姓名</th>
+                                    <th class="px-6 py-4">得分</th>
+                                    <th class="px-6 py-4">詳情</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-table-body" class="divide-y divide-gray-100">
+                                <!-- 資料列 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+        // Firebase 設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyB483OjoYNhxBSQRq5uELALJ3WmkOv1NCQ",
+            authDomain: "exam-705c2.firebaseapp.com",
+            projectId: "exam-705c2",
+            storageBucket: "exam-705c2.firebasestorage.app",
+            messagingSenderId: "335291582064",
+            appId: "1:335291582064:web:bc64070af45c41e05996b5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'exam-sys-01';
+
+        // 題目資料
+        const questions = [
+            { id: "q1", question: "圖書館有 3,640 本中文書和 2,175 本英文書。共有多少本書？", options: { A: "5,715 本", B: "5,815 本", C: "5,915 本", D: "6,815 本" }, answer: "B" },
+            { id: "q2", question: "書店原有 6,800 本書，賣出 3,456 本後，還剩多少本？", options: { A: "3,344 本", B: "3,444 本", C: "3,544 本", D: "4,344 本" }, answer: "A" },
+            { id: "q3", question: "媽媽有 3,000 元，買了一件衣服後還剩 1,765 元。那件衣服多少元？", options: { A: "1,235 元", B: "1,335 元", C: "2,235 元", D: "4,765 元" }, answer: "A" },
+            { id: "q4", question: "每輛巴士坐 65 人，7 輛巴士共坐多少人？", options: { A: "425 人", B: "435 人", C: "445 人", D: "455 人" }, answer: "D" },
+            { id: "q5", question: "學校有 180 名學生，平均分成 6 組。每組有多少人？", options: { A: "20 人", B: "30 人", C: "40 人", D: "60 人" }, answer: "B" },
+            { id: "q6", question: "一條繩長 1 米，用了 3/5，剩下幾分之幾？", options: { A: "1/5", B: "2/5", C: "3/5", D: "4/5" }, answer: "B" },
+            { id: "q7", question: "一瓶果汁有 750 毫升，喝了 350 毫升，還剩多少毫升？", options: { A: "300 毫升", B: "350 毫升", C: "400 毫升", D: "450 毫升" }, answer: "C" },
+            { id: "q8", question: "教室長 12 米，闊 8 米，四周的周界是多少米？", options: { A: "20 米", B: "40 米", C: "80 米", D: "96 米" }, answer: "B" },
+            { id: "q9", question: "下午 2 時 30 分，再過 1 小時 45 分，是幾時幾分？", options: { A: "下午 3 時 15 分", B: "下午 3 時 45 分", C: "下午 4 時 15 分", D: "下午 4 時 45 分" }, answer: "C" },
+            { id: "q10", question: "付了 200 元買一件 136 元的衣服，應找回多少元？", options: { A: "54 元", B: "64 元", C: "74 元", D: "136 元" }, answer: "B" }
+        ];
+
+        // 狀態管理
+        let currentUser = null;
+        let studentName = "";
+        let currentQIndex = 0;
+        let userAnswers = {};
+        let allResults = [];
+
+        // 初始化匿名登入
+        async function initAuth() {
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Auth error:", error);
+                document.getElementById('loading-text').innerText = "連線失敗，請重新整理頁面。";
+                document.getElementById('loading-text').classList.add('text-red-500');
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('user-display').innerText = `ID: ${user.uid.substring(0,6)}...`;
+                document.getElementById('loading-overlay').style.display = 'none';
+                checkAdminMode();
+            }
+        });
+
+        // 檢查是否為管理模式
+        function checkAdminMode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('admin')) {
+                const pass = prompt("請輸入管理員密碼：");
+                if (pass === "admin") {
+                    showView('admin');
+                    loadAdminData();
+                } else {
+                    alert("密碼錯誤");
+                    window.location.href = window.location.pathname;
+                }
+            }
+        }
+
+        // 畫面切換
+        window.showView = (viewId) => {
+            document.querySelectorAll('section').forEach(s => s.classList.add('hidden-view'));
+            document.getElementById(`view-${viewId}`).classList.remove('hidden-view');
+            
+            const header = document.getElementById('app-header');
+            const title = document.getElementById('header-title');
+            
+            if (viewId === 'admin') {
+                header.className = 'admin-theme text-white py-4 px-6 shadow-md transition-colors';
+                title.innerText = '教師管理後台';
+            } else if (viewId === 'result') {
+                header.className = 'result-theme text-white py-4 px-6 shadow-md transition-colors';
+                title.innerText = '測驗結束';
+            } else {
+                header.className = 'quiz-theme text-white py-4 px-6 shadow-md transition-colors';
+                title.innerText = '三年級數學小測驗';
+            }
+        };
+
+        // 學生答題邏輯
+        window.startQuiz = () => {
+            const nameInput = document.getElementById('student-name').value.trim();
+            if (!nameInput) return alert("請輸入姓名");
+            studentName = nameInput;
+            currentQIndex = 0;
+            userAnswers = {};
+            showView('quiz');
+            renderQuestion();
+        };
+
+        function renderQuestion() {
+            const q = questions[currentQIndex];
+            document.getElementById('q-text').innerText = `${currentQIndex + 1}. ${q.question}`;
+            document.getElementById('progress-text').innerText = `進度：${currentQIndex + 1} / ${questions.length}`;
+            document.getElementById('progress-bar').style.width = `${((currentQIndex + 1) / questions.length) * 100}%`;
+            
+            const optionsGrid = document.getElementById('options-grid');
+            optionsGrid.innerHTML = '';
+            
+            Object.entries(q.options).forEach(([key, value]) => {
+                const btn = document.createElement('button');
+                btn.className = `option-btn p-4 border-2 border-gray-100 rounded-xl text-left transition-all flex items-center gap-3 ${userAnswers[q.id] === key ? 'option-selected' : 'bg-white'}`;
+                btn.innerHTML = `<span class="w-8 h-8 rounded-full border flex items-center justify-center font-bold">${key}</span> ${value}`;
+                btn.onclick = () => selectOption(q.id, key);
+                optionsGrid.appendChild(btn);
+            });
+
+            // 按鈕控制
+            document.getElementById('btn-prev').disabled = currentQIndex === 0;
+            if (currentQIndex === questions.length - 1) {
+                document.getElementById('btn-next').classList.add('hidden-view');
+                document.getElementById('btn-submit').classList.remove('hidden-view');
+            } else {
+                document.getElementById('btn-next').classList.remove('hidden-view');
+                document.getElementById('btn-submit').classList.add('hidden-view');
+            }
+        }
+
+        function selectOption(qId, key) {
+            userAnswers[qId] = key;
+            renderQuestion();
+        }
+
+        window.nextQuestion = () => {
+            if (currentQIndex < questions.length - 1) {
+                currentQIndex++;
+                renderQuestion();
+            }
+        };
+
+        window.prevQuestion = () => {
+            if (currentQIndex > 0) {
+                currentQIndex--;
+                renderQuestion();
+            }
+        };
+
+        window.submitQuiz = async () => {
+            if (!currentUser) return alert("連線異常，請重新整理");
+            if (Object.keys(userAnswers).length < questions.length) {
+                if (!confirm("還有題目沒寫完，確定要提交嗎？")) return;
+            }
+
+            // 計算分數
+            let score = 0;
+            questions.forEach(q => {
+                if (userAnswers[q.id] === q.answer) score += 10;
+            });
+
+            // 儲存至 Firestore (符合路徑規則)
+            try {
+                document.getElementById('loading-overlay').style.display = 'flex';
+                document.getElementById('loading-text').innerText = "上傳成績中...";
+                
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'results'), {
+                    name: studentName,
+                    score: score,
+                    answers: userAnswers,
+                    uid: currentUser.uid,
+                    timestamp: serverTimestamp()
+                });
+
+                displayResult(score);
+            } catch (error) {
+                console.error("Save error:", error);
+                alert("儲存失敗，請檢查網路連線");
+            } finally {
+                document.getElementById('loading-overlay').style.display = 'none';
+            }
+        };
+
+        function displayResult(score) {
+            showView('result');
+            document.getElementById('result-score').innerText = `${score} 分`;
+            document.getElementById('res-name').innerText = studentName;
+            document.getElementById('res-count').innerText = score / 10;
+            
+            let grade = "";
+            let icon = "";
+            if (score >= 90) { grade = "特優"; icon = "🌟"; }
+            else if (score >= 80) { grade = "優良"; icon = "🏆"; }
+            else if (score >= 60) { grade = "及格"; icon = "👍"; }
+            else { grade = "待加強"; icon = "📚"; }
+            
+            document.getElementById('result-grade').innerText = `評級：${grade}`;
+            document.getElementById('result-icon').innerText = icon;
+        }
+
+        window.restartQuiz = () => {
+            window.location.reload();
+        };
+
+        // 教師管理邏輯
+        function loadAdminData() {
+            const qRef = query(
+                collection(db, 'artifacts', appId, 'public', 'data', 'results'),
+                orderBy('timestamp', 'desc')
+            );
+
+            onSnapshot(qRef, (snapshot) => {
+                allResults = [];
+                const tbody = document.getElementById('admin-table-body');
+                tbody.innerHTML = '';
+                
+                let totalScore = 0;
+                let passCount = 0;
+
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    allResults.push(data);
+                    
+                    totalScore += data.score;
+                    if (data.score >= 60) passCount++;
+
+                    const date = data.timestamp ? data.timestamp.toDate().toLocaleString() : '上傳中...';
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 text-sm text-gray-500">${date}</td>
+                        <td class="px-6 py-4 font-medium text-gray-800">${data.name}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-3 py-1 rounded-full text-xs font-bold ${data.score >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                ${data.score}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button onclick="alert('詳情功能開發中')" class="text-blue-600 hover:underline text-sm">檢視</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // 更新統計
+                const total = snapshot.size;
+                document.getElementById('stat-total').innerText = total;
+                document.getElementById('stat-avg').innerText = total > 0 ? (totalScore / total).toFixed(1) : 0;
+                document.getElementById('stat-pass').innerText = total > 0 ? Math.round((passCount / total) * 100) + '%' : '0%';
+
+            }, (error) => {
+                console.error("Admin listener error:", error);
+            });
+        }
+
+        window.exportToCSV = () => {
+            if (allResults.length === 0) return alert("尚無資料可匯出");
+            
+            let csvContent = "時間,姓名,得分\n";
+            allResults.forEach(r => {
+                const date = r.timestamp ? r.timestamp.toDate().toLocaleString().replace(/,/g, '') : '';
+                csvContent += `${date},${r.name},${r.score}\n`;
+            });
+
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `測驗成績匯出_${new Date().toLocaleDateString()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        // 啟動登入
+        initAuth();
+
+    </script>
+</body>
+</html>
